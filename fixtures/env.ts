@@ -11,7 +11,7 @@ function optional(name: string, fallback: string): string {
 export const env = {
   portalUrl: optional('PORTAL_URL', 'http://localhost:8080'),
   serverlessUrl: optional('SERVERLESS_URL', 'http://localhost:3339'),
-  flakyUrl: optional('FLAKY_URL', 'http://flaky-target.local'),
+  flakyUrl: optional('FLAKY_URL', 'http://flaky-target'),
   jwtSecret: required('JWT_SECRET'),
   testUserId: optional('TEST_USER_ID', 'e2e-user-1'),
   testFirebaseId: optional('TEST_FIREBASE_ID', 'e2e-firebase-1'),

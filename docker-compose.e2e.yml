@@ -111,10 +111,6 @@ services:
 
   flaky-target:
     build: ./flaky-target
-    networks:
-      default:
-        aliases:
-          - flaky-target.com.xyz
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost/state"]
       interval: 2s
@@ -219,7 +215,7 @@ services:
     environment:
       PORTAL_URL: http://portal:8080
       SERVERLESS_URL: http://serverless-functions:3339
-      FLAKY_URL: http://flaky-target.local
+      FLAKY_URL: http://flaky-target
       JWT_SECRET: ${JWT_SECRET:-e2e-jwt-secret-do-not-use-in-prod}
       DB_HOST: postgres
       DB_PORT: "5432"
