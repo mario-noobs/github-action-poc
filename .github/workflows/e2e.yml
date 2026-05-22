@@ -39,6 +39,8 @@ on:
 permissions:
   contents: read
   packages: read
+  pages: write
+  id-token: write
 
 jobs:
   e2e:
@@ -92,3 +94,29 @@ jobs:
           name: compose-logs
           path: logs/
           if-no-files-found: ignore
+
+  deploy-report:
+    needs: e2e
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download Playwright report
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report/
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
