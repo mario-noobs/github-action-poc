@@ -17,7 +17,7 @@ export function buildCheck(escalationId: string, opts: Opts = {}): CreateCheckPa
     type: 'status',
     url: opts.url ?? `${env.flakyUrl}/health`,
     locations: [opts.location ?? 'vie_sg'],
-    interval: opts.interval ?? 10,
+    interval: opts.interval ?? 15,
     recoverPeriod: opts.recoverPeriod ?? 0,
     confirmPeriod: opts.confirmPeriod ?? 0,
     method: 'GET',
