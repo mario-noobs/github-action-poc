@@ -33,13 +33,16 @@ export async function waitForIncident(
   const intervalMs = opts.intervalMs ?? 500
   const deadline = Date.now() + timeoutMs
 
+  let last: Array<{ id: string; status: string }> = []
   while (Date.now() < deadline) {
-    const incidents = await portal.getIncidentsForCheck(checkId)
-    const found = incidents.find((i) => !!i.id)
+    last = await portal.getIncidentsForCheck(checkId)
+    const found = last.find((i) => !!i.id)
     if (found) return found
     await new Promise((r) => setTimeout(r, intervalMs))
   }
-  throw new Error(`waitForIncident timed out after ${timeoutMs}ms for checkId=${checkId}`)
+  throw new Error(
+    `waitForIncident timed out after ${timeoutMs}ms for checkId=${checkId}; last seen: ${JSON.stringify(last)}`,
+  )
 }
 
 export async function expectStableCount(

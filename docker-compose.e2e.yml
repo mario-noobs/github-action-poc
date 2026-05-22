@@ -162,6 +162,9 @@ services:
     image: ${ORCHESTRATOR_IMAGE:?ORCHESTRATOR_IMAGE must be set}
     environment:
       <<: *app-env
+      # Worker subscribes to development:worker_channel:* (reads NODE_ENV=development).
+      # Override ENV here so orchestrator pushes to development:worker_channel:* to match.
+      ENV: development
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -71,7 +71,7 @@ export async function seedWorker(location = 'eu', workerId = 'e2e-worker-eu'): P
     await client.query(
       `INSERT INTO workers (id, ip, type, location, region)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (id) DO UPDATE SET location = EXCLUDED.location, region = EXCLUDED.region`,
       [workerId, '127.0.0.1', 'http', location, location],
     )
     return workerId
