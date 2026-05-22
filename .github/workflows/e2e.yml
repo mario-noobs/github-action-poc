@@ -32,6 +32,8 @@ on:
       worker_image:        { required: true, type: string }
       serverless_image:    { required: true, type: string }
       e2e_runner_image:    { required: false, type: string, default: "" }
+    secrets:
+      LOCALSTACK_AUTH_TOKEN: { required: true }
 
 permissions:
   contents: read
@@ -42,11 +44,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      PORTAL_IMAGE:       ${{ inputs.portal_image }}
-      ORCHESTRATOR_IMAGE: ${{ inputs.orchestrator_image }}
-      WORKER_IMAGE:       ${{ inputs.worker_image }}
-      SERVERLESS_IMAGE:   ${{ inputs.serverless_image }}
-      JWT_SECRET:         e2e-jwt-secret-do-not-use-in-prod
+      PORTAL_IMAGE:            ${{ inputs.portal_image }}
+      ORCHESTRATOR_IMAGE:      ${{ inputs.orchestrator_image }}
+      WORKER_IMAGE:            ${{ inputs.worker_image }}
+      SERVERLESS_IMAGE:        ${{ inputs.serverless_image }}
+      JWT_SECRET:              e2e-jwt-secret-do-not-use-in-prod
+      LOCALSTACK_AUTH_TOKEN:   ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

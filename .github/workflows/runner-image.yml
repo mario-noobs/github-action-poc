@@ -58,3 +58,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  call-e2e:
+    needs: build
+    uses: ./.github/workflows/e2e.yml
+    with:
+      portal_image: ghcr.io/mario-noobs/gha-poc/portal:latest
+      orchestrator_image: ghcr.io/mario-noobs/gha-poc/orchestrator:latest
+      worker_image: ghcr.io/mario-noobs/gha-poc/worker:latest
+      serverless_image: ghcr.io/mario-noobs/gha-poc/serverless-functions:latest
+      e2e_runner_image: ghcr.io/${{ github.repository }}/e2e-tests:latest
+    secrets:
+      LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
