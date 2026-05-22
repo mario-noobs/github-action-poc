@@ -1,0 +1,245 @@
+# End-to-end stack for user-portal-backend's escalation flow.
+#
+# Required image inputs (must be set in the shell or .env):
+#   PORTAL_IMAGE         — ghcr.io/<owner>/portal:<tag>
+#   ORCHESTRATOR_IMAGE   — ghcr.io/<owner>/orchestrator:<tag>
+#   WORKER_IMAGE         — ghcr.io/<owner>/worker:<tag>
+#   SERVERLESS_IMAGE     — ghcr.io/<owner>/serverless-functions:<tag>
+#   E2E_RUNNER_IMAGE     — ghcr.io/<owner>/e2e-tests:<tag>  (defaults to :latest)
+
+x-app-env: &app-env
+  # NODE_ENV MUST be 'development' specifically.
+  #   - portal config.service.ts isProduction() returns true unless NODE_ENV === 'development'.
+  #     The production branch hits real AWS DynamoDB instead of LocalStack.
+  #   - serverless-functions gates /dev/notifications on NODE_ENV !== 'production'.
+  # ENV stays 'test' so firebase config resolves to firebase-test.json (matches our stub).
+  NODE_ENV: development
+  ENV: test
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_USER: test
+  DB_USERNAME: test
+  DB_PASSWORD: test
+  DB_NAME: monitoringdog
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  AWS_ACCESS_KEY: test
+  # AWS_ACCESS_KEY_ID is the SDK's default credential-chain env name; needed when
+  # backend code uses AWS SDK clients directly instead of going through configService.getSqsClient().
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_REGION: ap-southeast-1
+  AWS_ACCOUNT_ID: "000000000000"
+  AWS_ENDPOINT: http://localstack:4566
+  LOCALSTACK_URL: http://localstack:4566
+  JWT_SECRET: ${JWT_SECRET:-e2e-jwt-secret-do-not-use-in-prod}
+  JWT_REFRESH_SECRET: ${JWT_SECRET:-e2e-jwt-secret-do-not-use-in-prod}
+  SECRET_TOKEN: e2e-secret-token
+  CALLBACK_TOKEN_SECRET: e2e-callback-secret
+  SES_HOST: localhost
+  SES_PORT: "1025"
+  SES_SMTP_USERNAME: test
+  SES_SMTP_PASSWORD: test
+  SES_FROM_MAIL: noreply@example.com
+  FRONTEND_URL: http://localhost:3000
+  SLACK_CLIENT_ID: e2e-slack-id
+  SLACK_CLIENT_SECRET: e2e-slack-secret
+  SLACK_SIGNING_SECRET: e2e-slack-signing
+  PLIVO_AUTH_ID: e2e-plivo
+  PLIVO_AUTH_TOKEN: e2e-plivo-token
+  PLIVO_APP_ID: e2e-plivo-app
+  ONESIGNAL_APP_ID: e2e-onesignal
+  ONESIGNAL_API_KEY: e2e-onesignal-key
+  STRIPE_SECRET_KEY: sk_test_e2e
+  STRIPE_WEBHOOK_SECRET: whsec_e2e
+  CHECKS_METER: m_e2e
+  TEAMS_METER: m_e2e
+  MEMBERS_METER: m_e2e
+  INTEGRATIONS_METER: m_e2e
+  STATUS_PAGES_METER: m_e2e
+  SMSS_METER: m_e2e
+  PHONES_METER: m_e2e
+  INFLUX_URL: http://localhost:8086
+  INFLUX_TOKEN: e2e-influx
+  BUCKET: e2e-bucket
+  WEB_PORTAL_EMAIL_AUTH: e2e-email-auth
+  DYNAMO_INCIDENTS_TABLE: development-incidents
+  DYNAMO_INCIDENT_EVENTS_TABLE: development-incident-events
+  INNGEST_DEV: "1"
+  INNGEST_ENV: development
+  INNGEST_BASE_URL: http://inngest:8288
+  INNGEST_EVENT_KEY: e2e-event-key
+  INNGEST_SIGNING_KEY: e2e-signing-key
+
+services:
+  postgres:
+    image: postgres:16.2
+    environment:
+      POSTGRES_DB: monitoringdog
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d monitoringdog"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7.2.4
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  localstack:
+    image: localstack/localstack:latest
+    environment:
+      # Read from .env or shell. Required: your active LocalStack Pro token.
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?LOCALSTACK_AUTH_TOKEN must be set in .env or shell}
+      SERVICES: "dynamodb,sqs,ssm"
+      DEFAULT_REGION: ap-southeast-1
+      EAGER_SERVICE_LOADING: "1"
+      DYNAMODB_INITIALIZATION_TIMEOUT: "120"
+    volumes:
+      - ./scripts/localstack-init:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4566/_localstack/health?services=dynamodb"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  flaky-target:
+    build: ./flaky-target
+    networks:
+      default:
+        aliases:
+          - flaky-target.local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/state"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  migrate:
+    image: ${PORTAL_IMAGE:?PORTAL_IMAGE must be set}
+    command: ["node", "migration.js"]
+    environment:
+      <<: *app-env
+    volumes:
+      - ./migrations:/app/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: "no"
+
+  portal:
+    image: ${PORTAL_IMAGE:?PORTAL_IMAGE must be set}
+    command: ["node", "main.js"]
+    environment:
+      <<: *app-env
+      PORT: "8080"
+    volumes:
+      # Stub firebase credentials so the Firebase Admin SDK's eager forRoot() doesn't crash.
+      # The file just needs to be a parseable service-account JSON; Firebase is never called.
+      - ./credentials-stub/firebase-test.json:/app/credentials/firebase-test.json:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:8080/', (r) => { r.resume(); process.exit(r.statusCode < 500 ? 0 : 1); }).on('error', () => process.exit(1))\""]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  orchestrator:
+    image: ${ORCHESTRATOR_IMAGE:?ORCHESTRATOR_IMAGE must be set}
+    environment:
+      <<: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+  worker:
+    image: ${WORKER_IMAGE:?WORKER_IMAGE must be set}
+    environment:
+      <<: *app-env
+      WORKER_ID: e2e-worker-eu
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  serverless-functions:
+    image: ${SERVERLESS_IMAGE:?SERVERLESS_IMAGE must be set}
+    environment:
+      <<: *app-env
+      MOCK_NOTIFICATIONS: "1"
+      PORT: "3339"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3339/api/inngest || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  inngest:
+    image: inngest/inngest:latest
+    command: >
+      inngest dev --no-poll -u http://serverless-functions:3339/api/inngest
+    depends_on:
+      serverless-functions:
+        condition: service_healthy
+    healthcheck:
+      # inngest/inngest has no wget/curl/nc — use bash's /dev/tcp to probe the port
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/8288"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  e2e-runner:
+    image: ${E2E_RUNNER_IMAGE:-ghcr.io/owner/e2e-tests:latest}
+    environment:
+      PORTAL_URL: http://portal:8080
+      SERVERLESS_URL: http://serverless-functions:3339
+      FLAKY_URL: http://flaky-target.local
+      JWT_SECRET: ${JWT_SECRET:-e2e-jwt-secret-do-not-use-in-prod}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: test
+      DB_PASSWORD: test
+      DB_NAME: monitoringdog
+      CI: "1"
+    volumes:
+      - ./reports:/app/reports
+      - ./fixtures:/app/fixtures
+      - ./tests:/app/tests
+    depends_on:
+      portal:
+        condition: service_healthy
+      orchestrator:
+        condition: service_started
+      worker:
+        condition: service_started
+      serverless-functions:
+        condition: service_healthy
+      inngest:
+        condition: service_healthy
+      flaky-target:
+        condition: service_healthy
+    profiles: ["run"]

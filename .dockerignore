@@ -1,0 +1,11 @@
+node_modules
+reports
+logs
+test-results
+playwright-report
+.git
+.github
+.env*
+README.md
+*.log
+.DS_Store

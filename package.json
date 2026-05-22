@@ -1,0 +1,33 @@
+{
+  "name": "user-portal-backend-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end test suite for user-portal-backend's escalation flow",
+  "packageManager": "pnpm@10.20.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --reporter=list",
+    "test:report": "playwright show-report",
+    "lint": "tsc --noEmit",
+    "compose:up": "docker compose -f docker-compose.e2e.yml up --wait",
+    "compose:down": "docker compose -f docker-compose.e2e.yml down -v",
+    "compose:logs": "docker compose -f docker-compose.e2e.yml logs",
+    "e2e": "./scripts/run-e2e.sh"
+  },
+  "dependencies": {
+    "@playwright/test": "1.49.0",
+    "dotenv": "16.4.5",
+    "jsonwebtoken": "9.0.2",
+    "pg": "8.13.0",
+    "ulid": "2.3.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "9.0.7",
+    "@types/node": "20.16.5",
+    "@types/pg": "8.11.10",
+    "typescript": "5.5.2"
+  }
+}
