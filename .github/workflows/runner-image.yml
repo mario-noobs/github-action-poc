@@ -70,6 +70,7 @@ jobs:
       e2e_runner_image: ghcr.io/${{ github.repository }}/e2e-tests:latest
     secrets:
       LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+      GHCR_TOKEN:            ${{ secrets.GHCR_TOKEN }}
     permissions:
       contents: read
       packages: read
