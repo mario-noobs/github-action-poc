@@ -35,6 +35,7 @@ on:
     secrets:
       LOCALSTACK_AUTH_TOKEN: { required: true }
       GHCR_TOKEN:            { required: false }
+      PUMBLE_WEBHOOK_URL:    { required: false }
 
 permissions:
   contents: read
@@ -99,6 +100,8 @@ jobs:
     needs: e2e
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    outputs:
+      page_url: ${{ steps.deploy.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -120,3 +123,37 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4
+
+  notify:
+    needs: [e2e, deploy-report]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Pumble notification
+        env:
+          PUMBLE_WEBHOOK_URL: ${{ secrets.PUMBLE_WEBHOOK_URL }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          REPORT_URL: ${{ needs.deploy-report.outputs.page_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$PUMBLE_WEBHOOK_URL" ]; then
+            echo "PUMBLE_WEBHOOK_URL not set, skipping notification"
+            exit 0
+          fi
+
+          if [ "$E2E_RESULT" = "success" ]; then
+            ICON="✅"
+            STATUS="passed"
+          else
+            ICON="❌"
+            STATUS="failed ($E2E_RESULT)"
+          fi
+
+          REPORT_LINE=""
+          if [ -n "$REPORT_URL" ]; then
+            REPORT_LINE=" | [View report]($REPORT_URL)"
+          fi
+
+          curl -s -X POST "$PUMBLE_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"$ICON E2E tests **$STATUS** | [View run]($RUN_URL)$REPORT_LINE\"}"

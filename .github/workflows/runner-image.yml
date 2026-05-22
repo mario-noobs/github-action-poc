@@ -71,6 +71,7 @@ jobs:
     secrets:
       LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
       GHCR_TOKEN:            ${{ secrets.GHCR_TOKEN }}
+      PUMBLE_WEBHOOK_URL:    ${{ secrets.PUMBLE_WEBHOOK_URL }}
     permissions:
       contents: read
       packages: read
